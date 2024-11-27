@@ -96,4 +96,65 @@ public class ResultSetsTest extends ResultSetTestBase {
     assertNextRow(iterator, 7);
     assertNextRow(iterator, 8);
   }
+
+  @Test
+  public void should_multipage_handle_zero_elem_pages() {
+    // Given
+    AsyncResultSet page1 = mockPage(true);
+    AsyncResultSet page2 = mockPage(true, 0, 1, 2);
+    AsyncResultSet page3 = mockPage(true);
+    AsyncResultSet page4 = mockPage(true, 3, 4, 5);
+    AsyncResultSet page5 = mockPage(false);
+
+    complete(page1.fetchNextPage(), page2);
+    complete(page2.fetchNextPage(), page3);
+    complete(page3.fetchNextPage(), page4);
+    complete(page4.fetchNextPage(), page5);
+
+    // When
+    MultiPageResultSet resultSet = new MultiPageResultSet(page1);
+
+    // Then
+    assertThat(resultSet.iterator().hasNext()).isTrue();
+
+    assertThat(resultSet.getColumnDefinitions()).isSameAs(page2.getColumnDefinitions());
+    assertThat(resultSet.getExecutionInfo()).isSameAs(page2.getExecutionInfo());
+    assertThat(resultSet.getExecutionInfos()).contains(page2.getExecutionInfo());
+
+    Iterator<Row> iterator = resultSet.iterator();
+
+    assertNextRow(iterator, 0);
+    assertNextRow(iterator, 1);
+    assertNextRow(iterator, 2);
+
+    assertThat(iterator.hasNext()).isTrue();
+
+    // This should have triggered the fetch of page4, skipping empty page3
+    assertThat(resultSet.getExecutionInfo()).isEqualTo(page4.getExecutionInfo());
+    assertThat(resultSet.getExecutionInfos())
+            .contains(page4.getExecutionInfo(), page4.getExecutionInfo());
+
+    assertNextRow(iterator, 3);
+    assertNextRow(iterator, 4);
+    assertNextRow(iterator, 5);
+
+    assertThat(iterator.hasNext()).isFalse();
+  }
+
+  @Test
+  public void should_multipage_handle_all_zero_elem_pages() {
+    // Given
+    AsyncResultSet page1 = mockPage(true);
+    AsyncResultSet page2 = mockPage(true);
+    AsyncResultSet page3 = mockPage(false);
+
+    complete(page1.fetchNextPage(), page2);
+    complete(page2.fetchNextPage(), page3);
+
+    // When
+    MultiPageResultSet resultSet = new MultiPageResultSet(page1);
+
+    // Then
+    assertThat(resultSet.iterator().hasNext()).isFalse();
+  }
 }
